@@ -857,7 +857,7 @@ body.resizing * {
 .search-box:focus-within {
   background: var(--elev);
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent);
 }
 
 .search-box input {
@@ -1448,11 +1448,18 @@ body.resizing * {
   border-color: var(--faint);
 }
 
-.select.open .select-button,
-.select-button:focus-visible {
+.select.open .select-button {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* Split out of .select.open above: the open state is decoration, the focus ring is the
+   only cue a keyboard user gets, so it uses the solid brand colour instead of the wash. */
+.select-button:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent);
 }
 
 .select-button:disabled {
@@ -1539,7 +1546,7 @@ body.resizing * {
 
 .input:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  box-shadow: 0 0 0 3px var(--accent);
 }
 
 .input::placeholder {
@@ -1548,7 +1555,7 @@ body.resizing * {
 
 .input.invalid {
   border-color: var(--bad);
-  box-shadow: 0 0 0 3px var(--bad-soft);
+  box-shadow: 0 0 0 3px var(--bad);
 }
 
 .input[type="number"]::-webkit-inner-spin-button {
