@@ -93,13 +93,16 @@ impl Db {
 
     fn migrate(&self) -> AppResult<()> {
         self.conn.execute_batch(SCHEMA)?;
-        self.conn.execute_batch(INDEXES)?;
         self.add_column_if_missing("local_files", "cover_checked", "INTEGER NOT NULL DEFAULT 0")?;
         // Time and size of the `.lrc` next to the song, so a lyrics file added later is noticed.
         self.add_column_if_missing("local_files", "lyrics_stamp", "TEXT")?;
         self.add_column_if_missing("peers", "trust", "TEXT NOT NULL DEFAULT 'full'")?;
         self.add_column_if_missing("notices", "read", "INTEGER NOT NULL DEFAULT 1")?;
         self.add_column_if_missing("notices", "pinned", "INTEGER NOT NULL DEFAULT 0")?;
+        // Indexes are built last: notices.read and notices.pinned above are columns added during
+        // this same migration, so the index build must wait until those columns exist — otherwise
+        // migrate() would fail on a fresh library with "no such column: read".
+        self.conn.execute_batch(INDEXES)?;
         // Tables and switches left behind when sync revisions, the mailbox, and the old on/off toggles were removed.
         self.conn.execute_batch(
             "DROP TABLE IF EXISTS mailbox_acks;
