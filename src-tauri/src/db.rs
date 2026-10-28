@@ -93,6 +93,7 @@ impl Db {
 
     fn migrate(&self) -> AppResult<()> {
         self.conn.execute_batch(SCHEMA)?;
+        self.conn.execute_batch(INDEXES)?;
         self.add_column_if_missing("local_files", "cover_checked", "INTEGER NOT NULL DEFAULT 0")?;
         // Time and size of the `.lrc` next to the song, so a lyrics file added later is noticed.
         self.add_column_if_missing("local_files", "lyrics_stamp", "TEXT")?;
@@ -1480,6 +1481,42 @@ fn device_defaults() -> Vec<(&'static str, Value)> {
         ("syncBlocks", json!({})),
     ]
 }
+
+/// Lookups the primary keys cannot serve, which SQLite would otherwise answer by scanning the table.
+///
+/// Every statement is `IF NOT EXISTS` and none of them change a table definition, so opening an
+/// existing library adds any missing index in place: no rebuild, no rewrite, no error for libraries
+/// predating this change. Each index names the query that needs it. They are all hot paths — per
+/// play, per rescan, or per folder import — and none of them are already covered, because the
+/// column is never the first field of an existing PRIMARY KEY or UNIQUE constraint.
+const INDEXES: &str = r#"
+-- Picking a peer that can serve a track happens on every remote play (lib.rs) and every media
+-- request (net.rs), but content_id is the second column of the (device_id, content_id) primary
+-- key, so the key can only ever be searched by device.
+CREATE INDEX IF NOT EXISTS idx_holdings_content_id ON holdings(content_id);
+-- Every playable file asks which local rows belong to a content id when serving media, counting
+-- pending covers, and rebinding a file after hashing. Only the primary key is indexed today.
+CREATE INDEX IF NOT EXISTS idx_local_files_content_id ON local_files(content_id);
+-- Re-scanning a folder or deleting a grant walks local_files by grant id, and nothing else
+-- indexes that column, so every import and rescan scans the whole table without it.
+CREATE INDEX IF NOT EXISTS idx_local_files_grant_id ON local_files(grant_id);
+-- Playing anything deletes the previous row for that track before inserting the new one, so this
+-- is two statements per play against a table capped only by the history setting.
+CREATE INDEX IF NOT EXISTS idx_play_history_content_id ON play_history(content_id);
+-- Same delete-then-insert pair, for files hashed too recently to have a content id yet.
+CREATE INDEX IF NOT EXISTS idx_play_history_local_file_id ON play_history(local_file_id);
+-- Trimming to the history cap asks for the newest rows by played_at and runs right after every
+-- play, which sorts the whole table every time without an ordered index to walk backwards.
+CREATE INDEX IF NOT EXISTS idx_play_history_played_at ON play_history(played_at);
+-- Keeps "unread" filters off a full scan; notices accumulate one row per remote join attempt.
+CREATE INDEX IF NOT EXISTS idx_notices_read ON notices(read);
+-- Clearing stale decode and unsupported notes targets one content id at a time, whenever a file
+-- turns out playable again or a library rescan re-reads it.
+CREATE INDEX IF NOT EXISTS idx_playback_notes_content_id ON playback_notes(content_id);
+-- Transport notes are written per playback attempt and dropped again by attempt id once the
+-- attempt succeeds, so this cleanup runs as often as playback starts.
+CREATE INDEX IF NOT EXISTS idx_playback_notes_attempt_id ON playback_notes(attempt_id);
+"#;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS content_items (
