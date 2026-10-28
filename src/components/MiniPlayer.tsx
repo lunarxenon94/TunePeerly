@@ -1,5 +1,5 @@
 // Original work © 2026 zhebuilds. AGPLv3 plus ADDITIONAL_TERMS.md.
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { api, type DesktopTrack } from "../api";
 import { coverSrc } from "./Cover";
@@ -23,6 +23,19 @@ function useDragOrClick(onClick: () => void) {
       const origin = start.current;
       start.current = null;
       if (origin && !origin.moved) onClick();
+    },
+    // Every other role="button" div in this repo (Card, HomePage, SearchPage) already
+    // activates on Enter via a handler identical to the one below; without it the two
+    // restore targets here are reachable by pointer only. Those three also test
+    // `closest("button, input, a, select, textarea")` because they sit inside pages full
+    // of nested controls that would otherwise fire twice — this one does not need the
+    // guard, since the mini window renders MiniPlayer alone (main.tsx returns early and
+    // never mounts <App />, so nothing else can handle the key first) and neither div
+    // contains a nested control. Space must be swallowed or it scrolls the window.
+    onKeyDown: (event: ReactKeyboardEvent) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      onClick();
     },
   };
 }
