@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { api, pickFolder } from "../api";
 import { useApp } from "../app/model";
+import { useFocusTrap } from "../app/focus";
 import { Select } from "./controls";
 import { Icons } from "../ui/icons";
 
@@ -108,13 +109,7 @@ function TimedAlert({ id, text, onClose }: { id: number; text: string; onClose: 
 
 export function Modal({ children, onClose, label }: { children: ReactNode; onClose: () => void; label: string }) {
   const box = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const first = box.current?.querySelector<HTMLElement>("input, textarea, button.primary, button");
-    first?.focus();
-    if (first instanceof HTMLInputElement) first.select();
-    return () => previous?.focus?.();
-  }, []);
+  useFocusTrap(box, "input, textarea, button.primary, button");
   return (
     <div
       className="modal-layer"
