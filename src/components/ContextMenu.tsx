@@ -3,6 +3,7 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../api";
 import { useApp } from "../app/model";
+import { focusableWithin, useFocusTrap } from "../app/focus";
 import { albumId } from "../lib/library";
 import { Icons } from "../ui/icons";
 
@@ -138,8 +139,25 @@ async function exposeTracks(ids: string[], expose: boolean) {
 }
 
 function Layer({ children, onClose }: { children: ReactNode; onClose: () => void }) {
+  const box = useRef<HTMLDivElement>(null);
+  // The menu is a portal-free layer that mounts on open, so the same hook that
+  // traps the modal also seeds focus here and hands it back to the trigger on
+  // close — otherwise the keyboard user stays on the row they right-clicked.
+  useFocusTrap(box, '[role="menuitem"]:not([disabled])');
+  const move = (to: number | "first" | "last") => {
+    const root = box.current;
+    if (!root) return;
+    const items = focusableWithin(root).filter((item) => item.getAttribute("role") === "menuitem");
+    if (items.length === 0) return;
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const at = active ? items.indexOf(active) : -1;
+    if (to === "first") items[0].focus();
+    else if (to === "last") items[items.length - 1].focus();
+    else items[at === -1 ? 0 : (at + to + items.length) % items.length].focus();
+  };
   return (
     <div
+      ref={box}
       className="menu-layer"
       onPointerDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -149,7 +167,25 @@ function Layer({ children, onClose }: { children: ReactNode; onClose: () => void
         if (event.target === event.currentTarget) onClose();
       }}
       onKeyDown={(event) => {
-        if (event.key === "Escape") onClose();
+        if (event.key === "Escape") {
+          onClose();
+          return;
+        }
+        // role="menu" promises arrow-key navigation to screen readers, and DOM
+        // order is the only order a portal-free layer can offer.
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          move(1);
+        } else if (event.key === "ArrowUp") {
+          event.preventDefault();
+          move(-1);
+        } else if (event.key === "Home") {
+          event.preventDefault();
+          move("first");
+        } else if (event.key === "End") {
+          event.preventDefault();
+          move("last");
+        }
       }}
     >
       {children}
